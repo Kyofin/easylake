@@ -15,6 +15,7 @@
     <description>Demo project for Spring Boot</description>
     <properties>
         <java.version>1.8</java.version>
+        <iceberg.version>0.13.2</iceberg.version>
     </properties>
     <dependencies>
         <dependency>
@@ -35,12 +36,17 @@
         <dependency>
             <groupId>org.apache.iceberg</groupId>
             <artifactId>iceberg-core</artifactId>
-            <version>0.13.2</version>
+            <version>${iceberg.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.iceberg</groupId>
             <artifactId>iceberg-data</artifactId>
-            <version>0.13.2</version>
+            <version>${iceberg.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.iceberg</groupId>
+            <artifactId>iceberg-parquet</artifactId>
+            <version>${iceberg.version}</version>
         </dependency>
 
         <dependency>

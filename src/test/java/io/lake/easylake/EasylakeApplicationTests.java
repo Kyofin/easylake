@@ -1,10 +1,9 @@
 package io.lake.easylake;
 
 import com.google.common.collect.Lists;
-import org.apache.iceberg.DataFile;
 import org.apache.iceberg.FileFormat;
+import org.apache.iceberg.PartitionKey;
 import org.apache.iceberg.RowDelta;
-import org.apache.iceberg.Transaction;
 import org.apache.iceberg.data.GenericAppenderFactory;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.Record;
@@ -13,6 +12,7 @@ import org.apache.iceberg.io.BaseTaskWriter;
 import org.apache.iceberg.io.FileAppenderFactory;
 import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.OutputFileFactory;
+import org.apache.iceberg.io.PartitionedWriter;
 import org.apache.iceberg.io.WriteResult;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -124,12 +124,13 @@ class EasylakeApplicationTests {
 		Table table = tables.create(schema, null, tableLocation);
 
 		// 写数据
-		final FileFormat fileFormat = FileFormat.valueOf("AVRO");
+		final FileFormat fileFormat = FileFormat.valueOf("PARQUET");
 		FileAppenderFactory<Record> appenderFactory = new GenericAppenderFactory(table.schema(), table.spec(), null,
 				table.schema(), null);
-		;
+
 		OutputFileFactory fileFactory = OutputFileFactory.builderFor(table, 1, 1).format(fileFormat).build();
-		;
+
+		// 非分区表可以直接用 UnpartitionedWriter，分区表可以用PartitionedWriter
 		final MyTaskWriter taskWriter = new MyTaskWriter(table.spec(),
 				fileFormat,
 				appenderFactory,
@@ -139,7 +140,7 @@ class EasylakeApplicationTests {
 		final GenericRecord gRecord = GenericRecord.create(schema);
 
 		List<Record> expected = Lists.newArrayList();
-		for (int i = 0; i < 20; i++) {
+		for (int i = 0; i < 500000; i++) {
 			final Record record = gRecord
 					.copy("id", i + 1, "event_time", System.currentTimeMillis(), "message", String.format("val-%d", i));
 			expected.add(record);
@@ -158,23 +159,6 @@ class EasylakeApplicationTests {
 				.validateDataFilesExist(Lists.newArrayList(result.referencedDataFiles()))
 				.commit();
 
-		//
-		// // todo用 TaskWriter生成 Datafile
-		//
-		// 初始化事务
-		Transaction t = table.newTransaction();
-
-		// commit operations to the transaction
-		for (DataFile dataFile : result.dataFiles()) {
-			t.newAppend()
-					.appendFile(dataFile)
-					.appendFile(dataFile)
-					.appendFile(dataFile)
-					.commit();
-		}
-
-		// commit all the changes to the table
-		t.commitTransaction();
 	}
 
 	@Test
@@ -195,27 +179,27 @@ class EasylakeApplicationTests {
 
 	private static class MyTaskWriter extends BaseTaskWriter<Record> {
 
-		private RollingFileWriter dataWriter;
+		private RollingFileWriter currentWriter;
 
 		private MyTaskWriter(PartitionSpec spec, FileFormat format,
 				FileAppenderFactory<Record> appenderFactory,
 				OutputFileFactory fileFactory, FileIO io,
 				long targetFileSize) {
 			super(spec, format, appenderFactory, fileFactory, io, targetFileSize);
-			this.dataWriter = new RollingFileWriter(null);
+			this.currentWriter = new RollingFileWriter(null);
 
 		}
 
 		@Override
 		public void write(Record row) throws IOException {
-			dataWriter.write(row);
+			currentWriter.write(row);
 		}
 
 
 		@Override
 		public void close() throws IOException {
-			if (dataWriter != null) {
-				dataWriter.close();
+			if (currentWriter != null) {
+				currentWriter.close();
 			}
 
 		}
