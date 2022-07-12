@@ -1,14 +1,23 @@
 package io.lake.easylake;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import org.apache.iceberg.CombinedScanTask;
 import org.apache.iceberg.FileFormat;
+import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.PartitionKey;
 import org.apache.iceberg.RowDelta;
+import org.apache.iceberg.TableProperties;
+import org.apache.iceberg.TableScan;
 import org.apache.iceberg.data.GenericAppenderFactory;
 import org.apache.iceberg.data.GenericRecord;
+import org.apache.iceberg.data.IcebergGenerics;
+import org.apache.iceberg.data.IcebergGenerics.ScanBuilder;
 import org.apache.iceberg.data.Record;
+import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.hadoop.HadoopTables;
 import org.apache.iceberg.io.BaseTaskWriter;
+import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.FileAppenderFactory;
 import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.OutputFileFactory;
@@ -28,6 +37,8 @@ import org.apache.iceberg.PartitionSpec;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+
+import static org.apache.iceberg.TableProperties.MAX_SNAPSHOT_AGE_MS;
 
 
 @SpringBootTest
@@ -166,7 +177,7 @@ class EasylakeApplicationTests {
 		Configuration conf = new Configuration();
 		HadoopTables tables = new HadoopTables(conf);
 		// 不指定namespace和表名，直接指定路径
-		final String tableLocation = "file:///Users/huzekang/Downloads/easylake/iceberg_warehouse/tb3";
+		final String tableLocation = "file:///Users/huzekang/Downloads/easylake/iceberg_warehouse/tb5";
 		final Table table = tables.load(tableLocation);
 		table.snapshots().forEach(snapshot -> {
 			System.out.println("--------------" + snapshot.snapshotId());
@@ -174,7 +185,67 @@ class EasylakeApplicationTests {
 				System.out.println(k + ":" + v);
 			});
 		});
+		table.history().forEach(historyEntry -> {
+			System.out.println(historyEntry.snapshotId());
+		});
 
+		// 根据数据找文件
+		TableScan scan = table.newScan();
+		TableScan filteredScan = scan.filter(Expressions.equal("level", "31"));
+		Schema projection = scan.schema();
+		Iterable<CombinedScanTask> tasks = filteredScan.planTasks();
+
+		for (CombinedScanTask task : tasks) {
+			for (FileScanTask file : task.files()) {
+				System.out.println(file.file().toString());
+			}
+		}
+
+		// 根据字段找每一行数据
+		CloseableIterable<Record> result = IcebergGenerics.read(table)
+				.where(Expressions.equal("level", "31"))
+				.build();
+		for (Record record : result) {
+			System.out.println(record.get(1));
+		}
+
+	}
+
+	@Test
+	public void expireMetadata() {
+		Configuration conf = new Configuration();
+		HadoopTables tables = new HadoopTables(conf);
+		// 不指定namespace和表名，直接指定路径
+		final String tableLocation = "file:///Users/huzekang/Downloads/easylake/iceberg_warehouse/tb5";
+		final Table table = tables.load(tableLocation);
+		// 删除过期的元数据快照: 会同时删除Manifests【xxx.avro】  和 Manifests Lists【snap-xxx.avro】
+		long tsToExpire = System.currentTimeMillis() - (1000 * 60 * 1);
+		table.expireSnapshots()
+				.expireOlderThan(tsToExpire)
+				.commit();
+	}
+
+	@Test
+	public void format2() {
+		Configuration conf = new Configuration();
+		HadoopTables tables = new HadoopTables(conf);
+		Schema schema = new Schema(
+				Types.NestedField.required(1, "level", Types.StringType.get()),
+				Types.NestedField.required(2, "event_time", Types.LongType.get()),
+				Types.NestedField.required(3, "message", Types.StringType.get())
+		);
+
+		// 不指定namespace和表名，直接指定路径
+		final String tableLocation = "file:///Users/huzekang/Downloads/easylake/iceberg_warehouse/tb5";
+		final ImmutableMap<String, String> pros = ImmutableMap.of(
+				TableProperties.FORMAT_VERSION, "2",
+				TableProperties.METADATA_DELETE_AFTER_COMMIT_ENABLED, "true",
+				TableProperties.METADATA_PREVIOUS_VERSIONS_MAX, "1",
+				TableProperties.MAX_SNAPSHOT_AGE_MS, 1000 * 60 * 2 + "",
+				TableProperties.MANIFEST_MIN_MERGE_COUNT, "2"
+		);
+		tables.dropTable(tableLocation);
+		tables.create(schema, null, null, pros, tableLocation);
 	}
 
 	private static class MyTaskWriter extends BaseTaskWriter<Record> {
