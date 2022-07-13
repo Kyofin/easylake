@@ -53,9 +53,10 @@ class EasylakeApplicationTests {
 
 		Configuration conf = new Configuration();
 		conf.set("fs.jfs.impl","io.juicefs.JuiceFileSystem");
-		conf.set("fs.AbstractFileSystem.jfs.impl","iio.juicefs.JuiceFS");
+		conf.set("fs.defaultFS","jfs://myjfs/");
+		conf.set("fs.AbstractFileSystem.jfs.impl","io.juicefs.JuiceFS");
 		conf.set("juicefs.meta","mysql://root:eWJmP7yvpccHCtmVb61Gxl2XLzIrRgmT@(localhost:3306)/juicefs2_meta");
-		String warehousePath = "jfs://myjfs/iceberg_warehouse";
+		String warehousePath = "/iceberg_warehouse";
 		// String warehousePath = "file:///Users/huzekang/Downloads/easylake/iceberg_warehouse";
 		HadoopCatalog catalog = new HadoopCatalog(conf, warehousePath);
 
