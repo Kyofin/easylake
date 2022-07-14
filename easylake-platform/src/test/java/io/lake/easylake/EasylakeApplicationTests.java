@@ -2,43 +2,37 @@ package io.lake.easylake;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.CombinedScanTask;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.FileScanTask;
-import org.apache.iceberg.PartitionKey;
+import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.RowDelta;
+import org.apache.iceberg.Schema;
+import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.TableScan;
+import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.GenericAppenderFactory;
 import org.apache.iceberg.data.GenericRecord;
 import org.apache.iceberg.data.IcebergGenerics;
-import org.apache.iceberg.data.IcebergGenerics.ScanBuilder;
 import org.apache.iceberg.data.Record;
 import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.hadoop.HadoopCatalog;
 import org.apache.iceberg.hadoop.HadoopTables;
 import org.apache.iceberg.io.BaseTaskWriter;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.FileAppenderFactory;
 import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.OutputFileFactory;
-import org.apache.iceberg.io.PartitionedWriter;
 import org.apache.iceberg.io.WriteResult;
+import org.apache.iceberg.types.Types;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.iceberg.hadoop.HadoopCatalog;
-import org.apache.iceberg.Table;
-import org.apache.iceberg.catalog.TableIdentifier;
-
-import org.apache.iceberg.Schema;
-import org.apache.iceberg.types.Types;
-import org.apache.iceberg.PartitionSpec;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-
-import static org.apache.iceberg.TableProperties.MAX_SNAPSHOT_AGE_MS;
 
 
 @SpringBootTest
