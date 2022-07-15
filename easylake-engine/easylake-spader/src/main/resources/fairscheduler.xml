@@ -18,14 +18,29 @@
 -->
 
 <allocations>
-  <pool name="production">
+  <pool name="default">
     <schedulingMode>FAIR</schedulingMode>
     <weight>1</weight>
-    <minShare>2</minShare>
+    <minShare>0</minShare>
   </pool>
-  <pool name="test">
-    <schedulingMode>FIFO</schedulingMode>
+  <pool name="query_pushdown">
+    <schedulingMode>FAIR</schedulingMode>
     <weight>2</weight>
-    <minShare>3</minShare>
+    <minShare>0</minShare>
+  </pool>
+  <pool name="heavy_tasks">
+    <schedulingMode>FAIR</schedulingMode>
+    <weight>5</weight>
+    <minShare>1</minShare>
+  </pool>
+  <pool name="lightweight_tasks">
+    <schedulingMode>FAIR</schedulingMode>
+    <weight>10</weight>
+    <minShare>1</minShare>
+  </pool>
+  <pool name="vip_tasks">
+    <schedulingMode>FAIR</schedulingMode>
+    <weight>15</weight>
+    <minShare>0</minShare>
   </pool>
 </allocations>

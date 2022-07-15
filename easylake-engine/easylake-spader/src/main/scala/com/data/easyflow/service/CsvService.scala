@@ -9,7 +9,7 @@ object CsvService {
   def parseSchemaAndPreview(spark: SparkSession, path: String,
                             charset: String, sep: String) = {
     // 设置这个线程的action都在这个pool里执行
-    spark.sparkContext.setLocalProperty("spark.scheduler.pool", "production")
+    spark.sparkContext.setLocalProperty("spark.scheduler.pool", "lightweight_tasks")
 
     val df = spark.read
       .format("csv")
