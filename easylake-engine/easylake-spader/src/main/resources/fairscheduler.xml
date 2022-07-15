@@ -25,7 +25,7 @@
   </pool>
   <pool name="query_pushdown">
     <schedulingMode>FAIR</schedulingMode>
-    <weight>2</weight>
+    <weight>1</weight>
     <minShare>0</minShare>
   </pool>
   <pool name="heavy_tasks">

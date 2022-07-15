@@ -28,6 +28,9 @@ object CsvService {
     val dataArray = rows.map(r => {
       r.toSeq.toArray
     })
+
+    spark.sparkContext.setLocalProperty("spark.scheduler.pool", null)
+
     // 根据首行获取字段类型
     val jSONObject = new JSONObject()
     jSONObject.put("data", dataArray)

@@ -42,6 +42,8 @@ public class WebApp {
             final SparkSession spark = SparderSparkSession.getSparkSession();
             spark.sparkContext().setLocalProperty("spark.scheduler.pool", "lightweight_tasks");
             spark.sql("SELECT java_method('java.lang.Thread', 'sleep', 15000l) from range(1,3,1,2)").show();
+            spark.sparkContext().setLocalProperty("spark.scheduler.pool", null);
+
             ctx.result("ok!");
         });
 
