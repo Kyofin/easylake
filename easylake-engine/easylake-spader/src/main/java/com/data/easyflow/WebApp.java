@@ -1,8 +1,10 @@
 package com.data.easyflow;
 
 import com.alibaba.fastjson.JSONObject;
+import com.data.easyflow.grpc.HelloWorldServer;
 import com.data.easyflow.service.CsvService;
 import io.javalin.Javalin;
+import io.javalin.core.event.EventHandler;
 import org.apache.spark.sql.SparkSession;
 import java.nio.charset.StandardCharsets;
 
@@ -16,9 +18,23 @@ public class WebApp {
     public static void main(String[] args) {
 
         Javalin app = Javalin.create().events(eventListener -> {
-            eventListener.serverStarted(SparderSparkSession::initSparkSession);
+            final HelloWorldServer server = new HelloWorldServer();
+            eventListener.serverStarted(new EventHandler() {
+                @Override
+                public void handleEvent() throws Exception {
+                    SparderSparkSession.initSparkSession();
+                    server.start();
+                    // server.blockUntilShutdown();
+                }
+            });
 
-            eventListener.serverStopping(SparderSparkSession::closeSparkSession);
+            eventListener.serverStopping(new EventHandler() {
+                @Override
+                public void handleEvent() throws Exception {
+                    SparderSparkSession.closeSparkSession();
+                    server.stop();
+                }
+            });
         }).start(7070);
 
         app.post("/tryRun", ctx -> {
