@@ -27,6 +27,7 @@ import org.apache.iceberg.io.FileAppenderFactory;
 import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.OutputFileFactory;
 import org.apache.iceberg.io.PartitionedWriter;
+import org.apache.iceberg.io.UnpartitionedWriter;
 import org.apache.iceberg.io.WriteResult;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.types.Types;
@@ -197,24 +198,23 @@ class EasylakeApplicationTests {
 		OutputFileFactory fileFactory = OutputFileFactory.builderFor(table, 1, 1).format(fileFormat).build();
 
 		// 非分区表可以直接用 UnpartitionedWriter，分区表可以用PartitionedWriter
-		final MyTaskWriter taskWriter = new MyTaskWriter(table.spec(),
-				fileFormat,
-				appenderFactory,
-				fileFactory,
-				table.io(), 128 * 1024 * 1024);
+		final UnpartitionedWriter unpartitionedWriter = new UnpartitionedWriter(null, fileFormat, appenderFactory,
+				fileFactory, table.io(), 128 * 1024 * 1024);
+
 
 		final GenericRecord gRecord = GenericRecord.create(schema);
 
 		List<Record> expected = Lists.newArrayList();
 		for (int i = 0; i < 5; i++) {
 			final Record record = gRecord
-					.copy("id", i + 10, "event_time", System.currentTimeMillis(), "message",
-							String.format("val-%d", i));
+					.copy("id", i + 10,
+							"event_time", System.currentTimeMillis(),
+							"message", String.format("val-%d", i));
 			expected.add(record);
 
-			taskWriter.write(record);
+			unpartitionedWriter.write(record);
 		}
-		WriteResult result = taskWriter.complete();
+		WriteResult result = unpartitionedWriter.complete();
 		System.out.println("新增文件数：" + result.dataFiles().length);
 		System.out.println("删除文件数：" + result.deleteFiles().length);
 		// 提交事务
