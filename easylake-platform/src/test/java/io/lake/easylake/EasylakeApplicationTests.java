@@ -352,7 +352,7 @@ class EasylakeApplicationTests {
 	}
 
 	@Test
-	public void format2() {
+	public void createFormatV2Table() {
 		Configuration conf = new Configuration();
 		HadoopTables tables = new HadoopTables(conf);
 		Schema schema = new Schema(
