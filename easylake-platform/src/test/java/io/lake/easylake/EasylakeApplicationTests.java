@@ -300,6 +300,72 @@ class EasylakeApplicationTests {
 	}
 
 	@Test
+	public void overwrite2PartitionTable() throws IOException {
+		Schema schema = new Schema(
+				Types.NestedField.required(1, "id", Types.IntegerType.get()),
+				Types.NestedField.required(2, "province", Types.StringType.get()),
+				Types.NestedField.required(3, "city", Types.StringType.get()),
+				Types.NestedField.required(4, "message", Types.StringType.get())
+		);
+		PartitionSpec spec = PartitionSpec.builderFor(schema)
+				.identity("province")
+				.identity("city")
+				.build();
+
+		Configuration conf = new Configuration();
+		HadoopTables tables = new HadoopTables(conf);
+		// 不指定namespace和表名，直接指定路径
+		final String tableLocation = "file:///Volumes/Samsung_T5/opensource/easylake/data/iceberg_warehouse/iceberg_warehouse/part_tb3";
+
+		Table table = tables.load( tableLocation);
+
+		// 写数据
+		final FileFormat fileFormat = FileFormat.valueOf("PARQUET");
+		FileAppenderFactory<Record> appenderFactory = new GenericAppenderFactory(table.schema(), table.spec(), null,
+				table.schema(), null);
+
+		OutputFileFactory fileFactory = OutputFileFactory.builderFor(table, 1, 1).format(fileFormat).build();
+
+		// 非分区表可以直接用 UnpartitionedWriter，分区表可以用PartitionedWriter
+		final PartitionedWriter partitionedWriter = new PartitionedWriter(spec, fileFormat, appenderFactory,
+				fileFactory, table.io(), 128 * 1024 * 1024) {
+			@Override
+			protected PartitionKey partition(Object row) {
+				final GenericRecord genericRecord = (GenericRecord) row;
+				final PartitionKey partitionKey = new PartitionKey(spec, schema);
+				partitionKey.partition(genericRecord);
+				return partitionKey;
+			}
+		};
+
+		final GenericRecord gRecord = GenericRecord.create(schema);
+
+		List<Record> expected = Lists.newArrayList();
+		for (int i = 0; i < 5; i++) {
+			final HashMap<String, Object> hashMap = Maps.newHashMap();
+			hashMap.put("id", i + 1);
+			hashMap.put("province", "gd");
+			hashMap.put("city", "shenzhen");
+			hashMap.put("message", String.format("覆盖-msg-%d", i*20));
+			final Record record = gRecord.copy(hashMap);
+			expected.add(record);
+
+			partitionedWriter.write(record);
+		}
+		WriteResult result = partitionedWriter.complete();
+		System.out.println("新增文件数：" + result.dataFiles().length);
+		System.out.println("删除文件数：" + result.deleteFiles().length);
+		// 提交事务
+		final OverwriteFiles overwriteFiles = table.newOverwrite();
+		Arrays.stream(result.dataFiles()).forEach(dataFile -> overwriteFiles.addFile(dataFile));
+
+		overwriteFiles.overwriteByRowFilter(Expressions.and(Expressions.equal("city","shenzhen"),Expressions.equal("province","gd")))
+				.commit();
+
+
+	}
+
+	@Test
 	public void replace2PartitionTable() throws IOException {
 		Schema schema = new Schema(
 				Types.NestedField.required(1, "id", Types.IntegerType.get()),
