@@ -18,6 +18,7 @@ import org.apache.iceberg.Schema;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.TableScan;
+import org.apache.iceberg.Transaction;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.data.GenericAppenderFactory;
 import org.apache.iceberg.data.GenericRecord;
@@ -522,6 +523,107 @@ class EasylakeApplicationTests {
 		Arrays.stream(result.dataFiles()).forEach(dataFile -> overwriteFiles.addFile(dataFile));
 		overwriteFiles.commit();
 
+	}
+
+	@Test
+	public void transactionAppend2UnPartitionTable() throws IOException, InterruptedException {
+		Schema schema = new Schema(
+				Types.NestedField.required(1, "id", Types.IntegerType.get()),
+				Types.NestedField.required(2, "event_time", Types.LongType.get()),
+				Types.NestedField.required(3, "message", Types.StringType.get())
+		);
+		Configuration conf = new Configuration();
+		HadoopTables tables = new HadoopTables(conf);
+		// 不指定namespace和表名，直接指定路径
+		final String tableLocation = "file:///Volumes/Samsung_T5/opensource/easylake/data/iceberg_warehouse/iceberg_warehouse/tb6";
+		Table table = tables.load(tableLocation);
+
+		// 写数据
+		final FileFormat fileFormat = FileFormat.valueOf("PARQUET");
+		FileAppenderFactory<Record> appenderFactory = new GenericAppenderFactory(table.schema(), table.spec(), null,
+				table.schema(), null);
+
+		OutputFileFactory fileFactory = OutputFileFactory.builderFor(table, 1, 1).format(fileFormat).build();
+
+		final GenericRecord gRecord = GenericRecord.create(schema);
+		final Transaction transaction = table.newTransaction();
+		final Thread thread1 = new Thread(new Runnable() {
+			@Override
+			public void run() {
+				// 非分区表可以直接用 UnpartitionedWriter，分区表可以用PartitionedWriter
+				final MyTaskWriter taskWriter = new MyTaskWriter(table.spec(),
+						fileFormat,
+						appenderFactory,
+						fileFactory,
+						table.io(), 128 * 1024 * 1024);
+				List<Record> expected = Lists.newArrayList();
+				for (int i = 0; i < 5; i++) {
+					final Record record = gRecord
+							.copy("id", i + 1, "event_time", System.currentTimeMillis(), "message",
+									String.format(Thread.currentThread().getId() + "-val-%d", i));
+					expected.add(record);
+
+					try {
+						taskWriter.write(record);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+				WriteResult result = null;
+				try {
+					result = taskWriter.complete();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				extracted(result, transaction);
+			}
+		});
+		thread1.start();
+
+		final Thread thread = new Thread(new Runnable() {
+			@Override
+			public void run() {
+				// 非分区表可以直接用 UnpartitionedWriter，分区表可以用PartitionedWriter
+				final MyTaskWriter taskWriter = new MyTaskWriter(table.spec(),
+						fileFormat,
+						appenderFactory,
+						fileFactory,
+						table.io(), 128 * 1024 * 1024);
+				List<Record> expected = Lists.newArrayList();
+				for (int i = 0; i < 5; i++) {
+					final Record record = gRecord
+							.copy("id", i + 1000, "event_time", System.currentTimeMillis(), "message",
+									String.format(Thread.currentThread().getId() + "-val-%d", i));
+					expected.add(record);
+
+					try {
+						taskWriter.write(record);
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+				WriteResult result = null;
+				try {
+					result = taskWriter.complete();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				extracted(result, transaction);
+			}
+		});
+		thread.start();
+		// 提交事务
+		thread.join();
+		thread1.join();
+		System.out.println("线程都ok！");
+
+		transaction.commitTransaction();
+
+	}
+
+	private synchronized void extracted(WriteResult result, Transaction transaction) {
+		final AppendFiles appendFiles = transaction.newAppend();
+		Arrays.stream(result.dataFiles()).forEach(dataFile -> appendFiles.appendFile(dataFile).commit());
 	}
 
 	@Test
