@@ -2,9 +2,11 @@ package io.lake.easylake;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.AppendFiles;
 import org.apache.iceberg.CombinedScanTask;
+import org.apache.iceberg.DataFile;
 import org.apache.iceberg.DeleteFile;
 import org.apache.iceberg.FileFormat;
 import org.apache.iceberg.FileMetadata;
@@ -41,9 +43,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 
 @SpringBootTest
@@ -545,9 +554,9 @@ class EasylakeApplicationTests {
 
 		OutputFileFactory fileFactory = OutputFileFactory.builderFor(table, 1, 1).format(fileFormat).build();
 
-		final GenericRecord gRecord = GenericRecord.create(schema);
-		final Transaction transaction = table.newTransaction();
-		final Thread thread1 = new Thread(new Runnable() {
+		List<DataFile> dataFileList = Collections.synchronizedList(new ArrayList<>());
+
+		class Task implements Runnable{
 			@Override
 			public void run() {
 				// 非分区表可以直接用 UnpartitionedWriter，分区表可以用PartitionedWriter
@@ -556,6 +565,7 @@ class EasylakeApplicationTests {
 						appenderFactory,
 						fileFactory,
 						table.io(), 128 * 1024 * 1024);
+				final GenericRecord gRecord = GenericRecord.create(schema);
 				List<Record> expected = Lists.newArrayList();
 				for (int i = 0; i < 5; i++) {
 					final Record record = gRecord
@@ -575,56 +585,32 @@ class EasylakeApplicationTests {
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
-				extracted(result, transaction);
+				Arrays.stream(result.dataFiles()).forEach(dataFile -> dataFileList.add(dataFile));
 			}
-		});
-		thread1.start();
+		}
+		//样例2 Common Thread Pool
+		ThreadFactory namedThreadFactory = new ThreadFactoryBuilder().setNameFormat("consumer-queue-thread-%d").build();
+		ExecutorService pool2 = new ThreadPoolExecutor(5, 8,0L, TimeUnit.MILLISECONDS,
+				new LinkedBlockingQueue<Runnable>(1024), namedThreadFactory, new ThreadPoolExecutor.AbortPolicy());
 
-		final Thread thread = new Thread(new Runnable() {
-			@Override
-			public void run() {
-				// 非分区表可以直接用 UnpartitionedWriter，分区表可以用PartitionedWriter
-				final MyTaskWriter taskWriter = new MyTaskWriter(table.spec(),
-						fileFormat,
-						appenderFactory,
-						fileFactory,
-						table.io(), 128 * 1024 * 1024);
-				List<Record> expected = Lists.newArrayList();
-				for (int i = 0; i < 5; i++) {
-					final Record record = gRecord
-							.copy("id", i + 1000, "event_time", System.currentTimeMillis(), "message",
-									String.format(Thread.currentThread().getId() + "-val-%d", i));
-					expected.add(record);
-
-					try {
-						taskWriter.write(record);
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-				}
-				WriteResult result = null;
-				try {
-					result = taskWriter.complete();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-				extracted(result, transaction);
-			}
-		});
-		thread.start();
-		// 提交事务
-		thread.join();
-		thread1.join();
+		//提交任务到线程池
+		for (int I = 0; I < 20; I++) {
+			pool2.execute(new Task());
+		}
+		//优雅关闭
+		pool2.shutdown();
+		while (!pool2.awaitTermination(1, TimeUnit.SECONDS)) {
+			System.out.println("线程还在执行。。。");
+		}
 		System.out.println("线程都ok！");
-
+		final Transaction transaction = table.newTransaction();
+		final AppendFiles appendFiles = transaction.newAppend();
+		dataFileList.forEach(dataFile -> appendFiles.appendFile(dataFile));
+		appendFiles.commit();
 		transaction.commitTransaction();
 
 	}
 
-	private synchronized void extracted(WriteResult result, Transaction transaction) {
-		final AppendFiles appendFiles = transaction.newAppend();
-		Arrays.stream(result.dataFiles()).forEach(dataFile -> appendFiles.appendFile(dataFile).commit());
-	}
 
 	@Test
 	public void readTable() {
