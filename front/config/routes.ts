@@ -1,5 +1,11 @@
 ﻿export default [
   {
+    path: '/datacenter',
+    name: '数据中心',
+    icon: 'smile',
+    component: './DataCenter',
+  },
+  {
     path: '/user',
     layout: false,
     routes: [
@@ -13,12 +19,12 @@
       },
     ],
   },
-  {
-    path: '/welcome',
-    name: 'welcome',
-    icon: 'smile',
-    component: './Welcome',
-  },
+  // {
+  //   path: '/welcome',
+  //   name: 'welcome',
+  //   icon: 'smile',
+  //   component: './Welcome',
+  // },
   {
     path: '/admin',
     name: 'admin',
@@ -44,7 +50,7 @@
   },
   {
     path: '/',
-    redirect: '/welcome',
+    redirect: '/datacenter',
   },
   {
     component: './404',

@@ -60,6 +60,7 @@ export default (props: any) => {
   "colorWeak": false,
   "title": "EasyLake",
   "pwa": false,
+  "logo": "/logo.png",
   "iconfontUrl": ""
 };
 const { formatMessage } = useIntl();

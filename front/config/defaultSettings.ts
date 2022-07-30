@@ -14,6 +14,7 @@ const Settings: LayoutSettings & {
   colorWeak: false,
   title: 'EasyLake',
   pwa: false,
+  logo: '/logo.png',
   // logo: 'https://gw.alipayobjects.com/zos/rmsportal/KDpgvguMpGfqaHPjicRK.svg',
   iconfontUrl: '',
 };
